@@ -1,1 +1,11 @@
-{"there":"is some data here","and":{"some":"is","structured":["with",true,"datatypes"]}}
+{
+  "there": "is some data here",
+  "and": {
+    "some": "is",
+    "structured": [
+      "with",
+      true,
+      "datatypes"
+    ]
+  }
+}
