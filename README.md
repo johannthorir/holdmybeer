@@ -30,3 +30,5 @@ Note that using the "If-Unmodified-Since" header is not granular - the modificat
 Supports the JSON Merge Patch standard: https://datatracker.ietf.org/doc/html/rfc7396 - merge patch documents have media type "application/merge-patch+json"
 
 
+## Copyright
+Copyright (C) 2014,2024 Jóhann Þórir Jóhannsson. All rights reserved.
