@@ -1,3 +1,5 @@
+#pragma once
+
 #include <chrono>
 
 using local_clock = std::chrono::system_clock;

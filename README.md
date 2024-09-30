@@ -33,5 +33,15 @@ Supports the JSON Merge Patch standard: https://datatracker.ietf.org/doc/html/rf
 
 The deamon reads "holdmybeer.json" from the current directory at startup and writes the document in memory to the file when exiting or when receiving SIGHUP.
 
+## Dependecies.
+
+Uses libfcgi and libfcgi++ for the FastCGI interface. RapidJSON is used JSON handling and is included. OpenSSL libcrypt is used the MD5 hash in the ETags. If using newer OpenSSL libraries you may get a deprecation warning for the MD5 function.
+
+
+## Examples.
+
+An example of using jquery $.ajax against this daemon is is holdmybeer.html
+
 ## Copyright
+
 Copyright (C) 2014,2024 Jóhann Þórir Jóhannsson. All rights reserved.

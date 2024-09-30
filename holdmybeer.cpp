@@ -1,4 +1,3 @@
-
 #include <unistd.h>
 #include <signal.h>
 #include <cstdlib>
@@ -74,7 +73,6 @@ std::mutex docMutex;
 
 // -----------------------------------------------------------------------------
 
-// TODO check how to use the stdin ...
 rapidjson::Value &JsonMergePatch(rapidjson::Value &target, rapidjson::Value &patch)
 { 
     if(!patch.IsObject()) 
@@ -94,6 +92,9 @@ rapidjson::Value &JsonMergePatch(rapidjson::Value &target, rapidjson::Value &pat
 }
 
 
+// -----------------------------------------------------------------------------
+
+// TODO check how to use the stream interface.
 
 std::string ReadRequestInput(FCGX_Request* request) 
 {
@@ -139,6 +140,7 @@ std::string ReadRequestInput(FCGX_Request* request)
     return retval;
 }
 
+// -----------------------------------------------------------------------------
 
 bool UnSerializeFromFile() 
 {
@@ -156,6 +158,23 @@ bool UnSerializeFromFile()
         lastModified =  local_clock::now();
         return true;
     }
+    return false;
+}
+
+// -----------------------------------------------------------------------------
+
+bool SerializeToFile()
+{
+    const std::lock_guard<std::mutex> lock(docMutex);
+    std::ofstream ofs(jsonFileName);
+    if(ofs.is_open()) 
+    {
+        rapidjson::OStreamWrapper osw(ofs);
+        rapidjson::PrettyWriter<rapidjson::OStreamWrapper> writer(osw);
+        doc.Accept(writer);
+        return true;
+    }
+    
     return false;
 }
 
@@ -185,22 +204,6 @@ void AddJsonFromBuffer(rapidjson::StringBuffer &buffer)
     std::cout << CONTENT_DISPOSITION_HEADER << JSON_HEADER << END_HEADERS << buffer.GetString();
 }
 
-// -----------------------------------------------------------------------------
-
-bool SerializeToFile()
-{
-    const std::lock_guard<std::mutex> lock(docMutex);
-    std::ofstream ofs(jsonFileName);
-    if(ofs.is_open()) 
-    {
-        rapidjson::OStreamWrapper osw(ofs);
-        rapidjson::Writer<rapidjson::OStreamWrapper> writer(osw);
-        doc.Accept(writer);
-        return true;
-    }
-    
-    return false;
-}
 
 // -----------------------------------------------------------------------------
 
