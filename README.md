@@ -29,6 +29,9 @@ Note that using the "If-Unmodified-Since" header is not granular - the modificat
 
 Supports the JSON Merge Patch standard: https://datatracker.ietf.org/doc/html/rfc7396 - merge patch documents have media type "application/merge-patch+json"
 
+## Data persistance.
+
+The deamon reads "holdmybeer.json" from the current directory at startup and writes the document in memory to the file when exiting or when receiving SIGHUP.
 
 ## Copyright
 Copyright (C) 2014,2024 Jóhann Þórir Jóhannsson. All rights reserved.
