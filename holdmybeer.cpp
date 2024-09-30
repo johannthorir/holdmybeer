@@ -466,13 +466,13 @@ void HandleFCGIHead(const char *path, FCGX_Request &req)
     }
 }
 
+// -----------------------------------------------------------------------------
 
 extern "C" void sighandler(int sig_no)
 {   
-
     switch(sig_no) {
         case SIGHUP: 
-            puts("HUP!");
+            SerializeToFile();
             break;
         case SIGINT:
         case SIGTERM:
@@ -480,10 +480,9 @@ extern "C" void sighandler(int sig_no)
             FCGX_ShutdownPending();
             break;
     }
-
-
 }
 
+// -----------------------------------------------------------------------------
 
 int main(void)
 {
@@ -552,9 +551,6 @@ int main(void)
   
     std::cerr << "FCGI loop exited, res is " << res << std::endl;
 
-    if(SerializeToFile())
-        std::cout << "File saved" << std::endl;
-    else    
-        std::cout << "Can't save the file...." << std::endl;
+    SerializeToFile();
     
 }
