@@ -1,0 +1,7 @@
+cmake_install.cmake
+CMakeCache.txt
+holdmybeer-fcgi
+Makefile
+.vscode/c_cpp_properties.json
+.vscode/settings.json
+CMakeFiles
