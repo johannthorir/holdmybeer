@@ -21,7 +21,7 @@ Example of an nginx location directive:
 
 An ETag is generated as a hash of the string-formatted resource when a resource is returned. 
 
-A response of a "412 Precondition Failed" is send and a PATCH modification is rejected if the "If-Match" header of the incoming PATCH doesn't match.
+A response of a "412 Precondition Failed" is sent and a PATCH modification is rejected if the "If-Match" header of the incoming PATCH doesn't match.
 
 Note that using the "If-Unmodified-Since" header is not granular - the modification time is on the whole store so it doesn't really work with this project.
 
@@ -35,7 +35,7 @@ The deamon reads "holdmybeer.json" from the current directory at startup and wri
 
 ## Dependecies.
 
-Uses libfcgi and libfcgi++ for the FastCGI interface. RapidJSON is used JSON handling and is included. OpenSSL libcrypt is used the MD5 hash in the ETags. If using newer OpenSSL libraries you may get a deprecation warning for the MD5 function.
+Uses libfcgi and libfcgi++ for the FastCGI interface. RapidJSON is used for JSON handling and is included. OpenSSL libcrypt is used for the MD5 hash in the ETags. If using newer OpenSSL libraries you may get a deprecation warning for the MD5 function.
 
 
 ## Examples.
