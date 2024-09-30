@@ -12,19 +12,25 @@
         <title>Hold My Beer</title>
     </head>
     <body>
+
         <div id="titlebar">Hold My Beer</div>
         <div id="content">
+
+
             <p>
                 <label for="pointer">JSON Pointer</label><br>
                 <input type="text" id="pointer" size="60" placeholder="json pointer here"/>
-            </p>
-
-
+            <p>
+            
             <p>
                 <label for="json">JSON Data</label><br>
                 <textarea id="json" rows="25" cols="60" placeholder="... enter json here..."></textarea>
             </p>
-
+            
+            <p>
+            <label for="ignore_if_match"><input type="checkbox" id="ignore_if_match"> Ignore if-match.</label>
+            <label for="merge_patch"><input type="checkbox" id="merge_patch"> Use Merge-Patch.</label>
+            </p>
             <p id="actionButtons">
                 <button class="actionButton" type="button" value="GET"     >GET</button>
                 <button class="actionButton" type="button" value="PATCH"  >PATCH</button>
@@ -32,86 +38,92 @@
                 <button class="actionButton" type="button" value="DELETE" >DELETE</button>
                 <button class="actionButton" type="button" value="HEAD"   >HEAD</button>
             </p>
-
+            
             <p id="res"></p>
             <pre id="data"></pre>
-        
-<script>
-
-    $(document).ready(() => { 
-        $("#actionButtons button").click(onButton);
-    });
-
-    
-    let lastETag = '';
-    let lastModified = '';
-
-
-    function onButton(ev) {
-        const method = ev.currentTarget.value;
-        const pointer = $("#pointer").val();
-        $("#res").text("");
-        $("#data").text("")
-        if(method !== "PATCH" && method !== "PUT") {
-            $.ajax({ 
-                url: '/jsonstore' + pointer, // URL of the resource 
-                type: method, 
-                success: function(data, textStatus, request) { 
-                    lastETag = request.getResponseHeader('ETag');
-                    lastModified = request.getResponseHeader('Last-Modified') 
-                    $("#res").html(
-                        "Date: " + request.getResponseHeader('Date') + "<br>" +
-                        "Last modified: " + lastModified + "<br>" +
-                        "ETag: " + lastETag
-                    );                    
                     
-                    $("#json").val(JSON.stringify(data, null, 2));
-                }, 
-                error: function(xhr, status, error) { 
-                    $("#res").text('Failed executing method ' + method);
-                    $("#data").text(JSON.stringify(error, null, 2))
-                } 
-            });     
-        }
-        else {
-            try {
-                JSON.parse($("#json").val());
-            } 
-            catch(e) {
-                $("#res").text("the content does not parse as JSON")
-                return;
-            }
-
-            const payload = $("#json").val();
-            console.log(method, pointer, payload);
-            $.ajax({ 
-                url: '/holdmybeer' + pointer,
-                type: method,
-                headers: {
-                    "If-Match" : lastETag,
-                    "If-Unmodified-Since" : lastModified
-                },
-                contentType: 'application/json', 
-                data: payload,
-                success: function(data, textStatus, request) { 
-                    lastETag = request.getResponseHeader('ETag')
-                    lastModified = request.getResponseHeader('Last-Modified') 
-                    $("#res").html(
-                        "Date: " + request.getResponseHeader('Date') + "<br>" +
-                        "Last modified: " + lastModified + "<br>" +
-                        "ETag: " + lastETag
-                    );                    
-                    $("#json").val(JSON.stringify(data, null, 2));
-                }, 
-                error: function(xhr, status, error) { 
-                    $("#res").text('Failed applying method ' + method);
-                    $("#data").text(JSON.stringify(error, null, 2))
-                } 
-            });             
-        }
-    }
-
-</script>
+            <script>
+            
+                $(document).ready(() => { 
+                    $("#actionButtons button").click(onButton);
+                });
+            
+                
+                let lastETag = '';
+                let lastModified = '';
+            
+            
+                function onButton(ev) {
+                    const method = ev.currentTarget.value;
+                    const pointer = $("#pointer").val();
+                    $("#res").text("");
+                    $("#data").text("")
+                    if(method !== "PATCH" && method !== "PUT") {
+                        $.ajax({ 
+                            url: '/holdmybeer' + pointer, // URL of the resource 
+                            type: method, 
+                            success: function(data, textStatus, request) { 
+                                lastETag = request.getResponseHeader('ETag');
+                                lastModified = request.getResponseHeader('Last-Modified') 
+                                $("#res").html(
+                                    "Date: " + request.getResponseHeader('Date') + "<br>" +
+                                    "Last modified: " + lastModified + "<br>" +
+                                    "ETag: " + lastETag
+                                );                    
+                                
+                                $("#json").val(JSON.stringify(data, null, 2));
+                            }, 
+                            error: function(xhr, status, error) { 
+                                $("#res").text('Failed executing method ' + method);
+                                $("#data").text(JSON.stringify(error, null, 2))
+                            } 
+                        });     
+                    }
+                    else {
+                        try {
+                            JSON.parse($("#json").val());
+                        } 
+                        catch(e) {
+                            $("#res").text("the content does not parse as JSON")
+                            return;
+                        }
+            
+                        const payload = $("#json").val();
+                        console.log(method, pointer, payload);
+            
+                        let headers = {
+                            "If-Unmodified-Since" : lastModified
+                        };
+            
+                        if(!$("#ignore_if_match").is(':checked'))
+                            headers["If-Match"] = lastETag;
+            
+                        $.ajax({ 
+                            url: '/holdmybeer' + pointer,
+                            type: method,
+                            headers: headers,
+                            contentType:  $("#merge_patch").is(':checked') ? 'application/merge-patch+json' : 'application/json', 
+                            data: payload,
+                            success: function(data, textStatus, request) { 
+                                lastETag = request.getResponseHeader('ETag')
+                                lastModified = request.getResponseHeader('Last-Modified') 
+                                $("#res").html(
+                                    "Date: " + request.getResponseHeader('Date') + "<br>" +
+                                    "Last modified: " + lastModified + "<br>" +
+                                    "ETag: " + lastETag
+                                );                    
+                                $("#json").val(JSON.stringify(data, null, 2));
+                            }, 
+                            error: function(xhr, status, error) { 
+                                $("#res").text('Failed applying method ' + method);
+                                $("#data").text(JSON.stringify(error, null, 2))
+                            } 
+                        });             
+                    }
+                }
+            
+            </script>
+            
 
         </div>
     </body>
