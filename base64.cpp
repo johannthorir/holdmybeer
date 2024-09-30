@@ -1,5 +1,3 @@
-// Copyright (c) 2014 Jóhann Þórir Jóhannsson. All rights reserved.
-
 #include <stdlib.h>
 #include "base64.h"
 
