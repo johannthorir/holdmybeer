@@ -32,6 +32,7 @@
 
 
 static const std::string JSON_HEADER = 
+    "Status: 200 OK\r\n"
     "Content-Type: application/json\r\n"
     "Cache-Control: no-cache, no-store, must-revalidate\r\n"
     "Pragma: no-cache\r\n"
@@ -39,13 +40,17 @@ static const std::string JSON_HEADER =
 
 
 static const std::string NOT_FOUND_HEADER = 
-    "Status: 404 Not Found\r\n\r\n";
+    "Status: 404 Not Found\r\n";
 
 static const std::string CLIENT_ERROR_HEADER = 
-    "Status: 400 Bad Request\r\n\r\n";
+    "Status: 400 Bad Request\r\n";
+
+static const std::string INCORRECT_PATCH_MEDIA_TYPE = 
+    "Status: 415 Unsupported Media\r\n"
+    "Accept-Patch: application/json, application/merge-patch+json\r\n";
 
 static const std::string PRECONDITION_FAILED_HEADER = 
-    "Status: 412 Precondition Failed\r\n\r\n";
+    "Status: 412 Precondition Failed\r\n";
 
 static const std::string METHOD_ERROR_HEADER = 
     "Status: 405 Method Not Allowed\r\n"
@@ -89,55 +94,6 @@ rapidjson::Value &JsonMergePatch(rapidjson::Value &target, rapidjson::Value &pat
         else
             target.AddMember(p->name, p->value, doc.GetAllocator());
     return target;
-}
-
-
-// -----------------------------------------------------------------------------
-
-// TODO check how to use the stream interface.
-
-std::string ReadRequestInput(FCGX_Request* request) 
-{
-    int bufferSize = 1024;
-    char *buffer = 0;
-    int bytesRead = 0;
-    int error;
-    do 
-    {
-        // we start from buffer 2KB
-        // and than double it's size on every iteration
-        bufferSize = bufferSize << 1;
-
-        buffer = reinterpret_cast<char*>(realloc(buffer, bufferSize));
-        if (buffer == NULL)
-        {
-            free(buffer);
-            return "";
-        }
-
-        bytesRead += FCGX_GetStr(buffer + bytesRead, bufferSize - bytesRead, request->in);
-
-        if (bytesRead == 0)
-        {
-
-            free(buffer);
-            return "";
-        }
-
-        error = FCGX_GetError(request->in);
-        if (error != 0)
-        {
-            free(buffer);
-            return "";
-        }
-    } 
-    while (bytesRead == bufferSize);
-
-    // finalize input string
-    buffer[bytesRead] = '\0';
-    std::string retval(buffer);
-    free(buffer);
-    return retval;
 }
 
 // -----------------------------------------------------------------------------
@@ -235,7 +191,7 @@ void HandleFCGIGet(const char *path, FCGX_Request &req)
     {
         try 
         {
-            std::cout << NOT_FOUND_HEADER;
+            std::cout << NOT_FOUND_HEADER << END_HEADERS;
         }
         catch(std::exception const &e)  
         {
@@ -265,7 +221,7 @@ void HandleFCGIPatch(const char *path, FCGX_Request &req)
         std::cerr << "PATCH Input is neither json or merge-patch json but '" << contentType << "'" << std::endl;
         try 
         {
-            std::cout << CLIENT_ERROR_HEADER;
+            std::cout << INCORRECT_PATCH_MEDIA_TYPE << END_HEADERS;
         }
         catch(std::exception const &e)  
         {
@@ -274,16 +230,16 @@ void HandleFCGIPatch(const char *path, FCGX_Request &req)
         return;        
     }
 
-    // Retrieve the payload
-    std::string temp = ReadRequestInput(&req);
     rapidjson::Document incoming(&doc.GetAllocator());
-    incoming.Parse(rapidjson::StringRef(temp.c_str()));
+    rapidjson::IStreamWrapper isw(std::cin);
+    incoming.ParseStream(isw); 
+    
     if(incoming.HasParseError()) 
     {
         // RETURN PARSE ERROR HEADERS.
         try 
         {
-            std::cout << CLIENT_ERROR_HEADER;
+            std::cout << CLIENT_ERROR_HEADER << END_HEADERS;
         }
         catch(std::exception const &e)  
         {
@@ -316,7 +272,7 @@ void HandleFCGIPatch(const char *path, FCGX_Request &req)
                 
                 if(std::string(http_if_match) != oss.str())
                 {
-                    std::cout << PRECONDITION_FAILED_HEADER;
+                    std::cout << PRECONDITION_FAILED_HEADER << END_HEADERS;
                     return;
                 }
             }
@@ -349,7 +305,7 @@ void HandleFCGIPatch(const char *path, FCGX_Request &req)
 
     try 
     {
-        FCGX_PutS(NOT_FOUND_HEADER.c_str(), req.out);
+        std::cout << NOT_FOUND_HEADER << END_HEADERS;
     }
     catch(std::exception const &e)  
     {
@@ -365,6 +321,24 @@ void HandleFCGIPut(const char *path, FCGX_Request &req)
     // Let's get the document 
     const std::lock_guard<std::mutex> lock(docMutex);
     
+    // check the content type:
+    std::string contentType(FCGX_GetParam("CONTENT_TYPE", req.envp));    
+    bool isJson           = (contentType == "application/json");
+
+    if(!isJson)
+    {
+        // RETURN PARSE ERROR HEADERS.
+        std::cerr << "PUT Input is not json but '" << contentType << "'" << std::endl;
+        try 
+        {
+            std::cout << INCORRECT_PATCH_MEDIA_TYPE << END_HEADERS;
+        }
+        catch(std::exception const &e)  
+        {
+            std::cerr << "Exception when returning Client Error." << e.what() << std::endl;
+        }      
+        return;        
+    }
     // Retrieve the payload
     std::string temp = ReadRequestInput(&req);
     rapidjson::Document incoming(&doc.GetAllocator());
@@ -376,7 +350,7 @@ void HandleFCGIPut(const char *path, FCGX_Request &req)
         // RETURN PARSE ERROR HEADERS.
         try 
         {
-            std::cout << CLIENT_ERROR_HEADER;
+            std::cout << CLIENT_ERROR_HEADER << END_HEADERS;
         }
         catch(std::exception const &e)  
         {
@@ -422,7 +396,7 @@ void HandleFCGIDelete(const char *path, FCGX_Request &req)
     } 
     else         
     {
-        std::cout << NOT_FOUND_HEADER;
+        std::cout << NOT_FOUND_HEADER << END_HEADERS;
     }    
 }
 
@@ -457,7 +431,7 @@ void HandleFCGIHead(const char *path, FCGX_Request &req)
     {
         try 
         {
-            std::cout << NOT_FOUND_HEADER;
+            std::cout << NOT_FOUND_HEADER << END_HEADERS;
         }
         catch(std::exception const &e)  
         {
