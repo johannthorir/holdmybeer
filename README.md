@@ -29,9 +29,15 @@ Note that using the "If-Unmodified-Since" header is not granular - the modificat
 
 Supports the JSON Merge Patch standard: https://datatracker.ietf.org/doc/html/rfc7396 - merge patch documents have media type "application/merge-patch+json"
 
+## Settings
+
+The daemon reads the settings from the json file /etc/holdmybeer/settings.json and expects an object with two member
+* "port" - this is the name of the fastcgi port, either a unix port or a tcp port.
+* "datafile" - path to the file for the persistance of the json document.
+
 ## Data persistance.
 
-The deamon reads "holdmybeer.json" from the current directory at startup and writes the document in memory to the file when exiting or when receiving SIGHUP.
+The deamon reads the json file whose path is in the "datafile" member of the settings document. The document is written to the file when exiting or when receiving SIGHUP.
 
 ## Dependecies.
 
@@ -40,7 +46,7 @@ Uses libfcgi and libfcgi++ for the FastCGI interface. RapidJSON is used for JSON
 
 ## Examples.
 
-An example of using jquery $.ajax against this daemon is is holdmybeer.html
+An example of using jquery $.ajax against this daemon is is example.html
 
 ## Copyright
 

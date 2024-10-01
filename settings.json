@@ -1,0 +1,4 @@
+{
+    "port": "/var/run/holdmybeer.sock",
+    "datafile": "/usr/share/holdmybeer/data.json"
+}

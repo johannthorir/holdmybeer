@@ -3,12 +3,18 @@
     <head>      
         <meta http-equiv="Content-Type" content="text/html; charset=utf8" />
         <script
-            src="https://code.jquery.com/jquery-3.7.1.slim.js"
-            integrity="sha256-UgvvN8vBkgO0luPSUl2s8TIlOSYRoGFAX4jlCIm9Adc="
-            crossorigin="anonymous"></script>                
+          src="https://code.jquery.com/jquery-3.7.1.min.js"
+          integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
+          crossorigin="anonymous"></script>              
 
-        <link rel="stylesheet" href="default.css">
         <style>
+            html {-webkit-font-smoothing: antialiased;-moz-osx-font-smoothing: grayscale;}
+            body { font-size: 100%;font-family: 'Helvetica', 'Arial', sans-serif;padding: 0px; margin: 0px;}
+            h1,h2,h3,h4 { color : #003569; }
+            h2,h3,h4 { margin-top : 20px; margin-bottom : 6px;}
+            #titlebar { height:32px;background-color:rgb(0,58,112);color:white;padding:2px 8px;font-weight:bold;line-height:32px;}
+            #content {font-size:10pt;padding:0px 12px;max-width:1000px;margin-left:auto;margin-right:auto;}
+            .actionButton { cursor: pointer; padding: 8px; margin: 4px; border: 1px solid rgb(127,154,190); border-radius: 5px 5px 5px 5px; font-style: italic; font-weight: bold; font-size: 1em; background: white; color: rgba(0,53,105,1); }
             input[type=text] { padding: 4px; font-size : 110%; }
             textarea { padding: 4px; font-size : 110%; }
         </style>
@@ -26,28 +32,90 @@
             
             <p>
                 <label for="json">JSON Data</label><br>
-                <textarea id="json" rows="25" cols="60" placeholder="... enter json here..."></textarea>
+                     <textarea id="json" rows="25" cols="60" placeholder="... enter json here..."></textarea>
             </p>
             
             <p>
-            <label for="ignore_if_match"><input type="checkbox" id="ignore_if_match"> Ignore if-match.</label>
-            <label for="merge_patch"><input type="checkbox" id="merge_patch"> Use Merge-Patch.</label>
+                <label for="ignore_if_match"><input type="checkbox" id="ignore_if_match"> Ignore if-match.</label>
+                <label for="merge_patch"><input type="checkbox" id="merge_patch"> Use Merge-Patch.</label>
             </p>
             <p id="actionButtons">
-                <button class="actionButton" type="button" value="GET"     >GET</button>
+                <button class="actionButton" type="button" value="GET"    >GET</button>
                 <button class="actionButton" type="button" value="PATCH"  >PATCH</button>
                 <button class="actionButton" type="button" value="PUT"    >PUT</button>
                 <button class="actionButton" type="button" value="DELETE" >DELETE</button>
                 <button class="actionButton" type="button" value="HEAD"   >HEAD</button>
             </p>
-            
             <p id="res"></p>
             <pre id="data"></pre>
-                    
+            <p>         
+                <label for="re"">Reference</label><br> 
+                <input type="text" id="ref" size="60" placeholder="reference lookup">
+                <button class="actionButton" type="button" value=""  id="resolve" >Look up</button>
+                <pre id="lookup"></pre>
+            </p>
+
+
+
             <script>
+                // this is from rosettacode.
+
+                class JSONPointer {
+                    #tokens;
+
+                    constructor(pointer) {
+                        this.#tokens = this.#parse(pointer);
+                    }
+
+                    resolve(data) {
+                        return this.#tokens.reduce(this.#getItem.bind(this), data);
+                    }
+
+                    toString() {
+                        return this.#encode(this.#tokens);
+                    }
+
+                    #parse(pointer)  {
+                        if (pointer.length && !pointer.startsWith("/")) {
+                            throw new JSONPointerError(`\"${pointer}\" pointers must start with a slash or be the empty string`);
+                        }
+                        return pointer.split("/").map((token) => token.replaceAll("~1", "/").replaceAll("~0", "~")).slice(1);
+                    }
+
+                    #getItem(obj, token, idx) {
+                        if(typeof obj === "object" && !(Array.isArray(obj) && token === "length") && Object.hasOwn(obj, token))
+                            return obj[token];
+                        throw new JSONPointerError(`\"${this.#encode(this.#tokens.slice(0, idx + 1))}\" does not exist`);
+                    }
+
+                    #encode(tokens) {
+                        if (!tokens.length) return "";
+                        return ("/" + tokens.map((token) => token.replaceAll("~", "~0").replaceAll("/", "~1")).join("/"));
+                    }
+                }
+
+                class JSONPointerError extends Error {}
+            </script>
+
+
+            <script>
+                let doc = {};
             
                 $(document).ready(() => { 
                     $("#actionButtons button").click(onButton);
+                    $("#resolve").click(() => {
+                        let ref = $("#ref").val();
+                        console.log(ref);
+                        try {
+                            const pointer = new JSONPointer(ref);
+                            const result = pointer.resolve(doc);
+                            $("#lookup").text(JSON.stringify(result, undefined, 2));
+                        }        
+                        catch(e) {
+                            console.log(e)
+                        }
+            
+                    })
                 });
             
                 
@@ -72,7 +140,7 @@
                                     "Last modified: " + lastModified + "<br>" +
                                     "ETag: " + lastETag
                                 );                    
-                                
+                                doc = data;
                                 $("#json").val(JSON.stringify(data, null, 2));
                             }, 
                             error: function(xhr, status, error) { 

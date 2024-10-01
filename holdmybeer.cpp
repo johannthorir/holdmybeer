@@ -72,6 +72,7 @@ volatile sig_atomic_t powerSwitch = 1;
 
 time_point lastModified;
 rapidjson::Document doc;
+rapidjson::Document settings;
 std::mutex docMutex;
 
 
@@ -98,10 +99,30 @@ rapidjson::Value &JsonMergePatch(rapidjson::Value &target, rapidjson::Value &pat
 
 // -----------------------------------------------------------------------------
 
+bool ReadSettingsFromFile() 
+{    
+    std::ifstream in("/etc/holdmybeer/settings.json");
+    if(in.is_open()) 
+    {
+        rapidjson::IStreamWrapper isw(in);        
+        settings.ParseStream(isw);
+        if(settings.HasParseError()) 
+        {
+            std::cerr << "Parse errors in settings file" << std::endl;
+            return false;
+        }        
+        return true;
+    }
+    return false;
+}
+
+
+// -----------------------------------------------------------------------------
+
 bool UnSerializeFromFile() 
 {
     const std::lock_guard<std::mutex> lock(docMutex);
-    std::ifstream in(jsonFileName);
+    std::ifstream in(settings["datafile"].GetString());
     if(in.is_open()) 
     {
         rapidjson::IStreamWrapper isw(in);        
@@ -122,7 +143,7 @@ bool UnSerializeFromFile()
 bool SerializeToFile()
 {
     const std::lock_guard<std::mutex> lock(docMutex);
-    std::ofstream ofs(jsonFileName);
+    std::ofstream ofs(settings["datafile"].GetString());
     if(ofs.is_open()) 
     {
         rapidjson::OStreamWrapper osw(ofs);
@@ -340,12 +361,13 @@ void HandleFCGIPut(const char *path, FCGX_Request &req)
         return;        
     }
     // Retrieve the payload
-    std::string temp = ReadRequestInput(&req);
     rapidjson::Document incoming(&doc.GetAllocator());
-    incoming.Parse(rapidjson::StringRef(temp.c_str()));
+    rapidjson::IStreamWrapper isw(std::cin);
+    incoming.ParseStream(isw); 
+
     if (incoming.HasParseError()) 
     {
-        std::cerr << "PUT input to '" << std::string(path) << "' has parse errors: '" << temp << "'" << std::endl;
+        std::cerr << "PUT input to '" << std::string(path) << "' has parse errors." << std::endl;
 
         // RETURN PARSE ERROR HEADERS.
         try 
@@ -460,6 +482,12 @@ extern "C" void sighandler(int sig_no)
 
 int main(void)
 {
+
+    ReadSettingsFromFile();
+
+    std::cout << settings["datafile"].GetString() << std::endl;
+    std::cout << settings["port"].GetString() << std::endl;
+
     struct sigaction new_action, old_action;    
     new_action.sa_handler = sighandler;
     sigemptyset(&new_action.sa_mask);
@@ -481,7 +509,7 @@ int main(void)
         std::cerr << "FCGX_Init fail: " << res << std::endl;
 
     umask(0);
-    int sock = FCGX_OpenSocket(FCGI_PORT.c_str(), 128);
+    int sock = FCGX_OpenSocket(settings["port"].GetString(), 128);
 
     
 
