@@ -4,7 +4,7 @@ This is a very simple JSON storage daemon implemented as a FastCGI application. 
 
 The daemon has one document in memory and supports returning document fragments when queried with a JSON Pointer in the URL path.
 
-It supports PUT of an application/json data to the JSON Pointer, as well as PATCH with application/merge-patch+json data.
+It supports PUT of an application/json data to the JSON Pointer (https://datatracker.ietf.org/doc/html/rfc6901) , as well as PATCH with application/merge-patch+json data.
 
 Nodes in the document can be removed with the DELETE method.
 
