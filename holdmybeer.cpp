@@ -31,6 +31,8 @@
 #include "base64.h"
 
 
+static const std::string PID_FILE "/var/run/holdmybeer-fcgi.pid";
+
 static const std::string JSON_HEADER = 
     "Status: 200 OK\r\n"
     "Content-Type: application/json\r\n"
@@ -480,9 +482,20 @@ extern "C" void sighandler(int sig_no)
 
 // -----------------------------------------------------------------------------
 
+void SavePid() {
+    std::ofstream pidfile;
+    pidfile.open(PID_FILE);
+    pidfile << getpid();
+    pidfile.close();
+}
+
+// -----------------------------------------------------------------------------
+
 int main(void)
 {
 
+    SavePid();
+    
     ReadSettingsFromFile();
 
     std::cout << settings["datafile"].GetString() << std::endl;
