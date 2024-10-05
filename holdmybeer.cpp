@@ -31,7 +31,6 @@
 #include "base64.h"
 
 
-static const std::string PID_FILE="/var/run/holdmybeer-fcgi.pid";
 
 static const std::string JSON_HEADER = 
     "Status: 200 OK\r\n"
@@ -66,9 +65,9 @@ static const std::string METHOD_ERROR_BODY =
 
 static const std::string END_HEADERS = "\r\n";
 
-
+static const std::string PID_FILE="/var/run/holdmybeer-fcgi.pid";
 static const std::string FCGI_PORT = "/var/run/holdmybeer.sock";
-static const std::string jsonFileName = "holdmybeer.json";
+static const std::string SETTINGS_FILE="/etc/holdmybeer/settings.json";
 
 volatile sig_atomic_t powerSwitch = 1;
 
@@ -103,7 +102,7 @@ rapidjson::Value &JsonMergePatch(rapidjson::Value &target, rapidjson::Value &pat
 
 bool ReadSettingsFromFile() 
 {    
-    std::ifstream in("/etc/holdmybeer/settings.json");
+    std::ifstream in(SETTINGS_FILE);
     if(in.is_open()) 
     {
         rapidjson::IStreamWrapper isw(in);        
