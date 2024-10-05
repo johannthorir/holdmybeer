@@ -1,0 +1,14 @@
+[Unit]
+Description=A JSON storage fcgi daemon.
+
+[Service]
+Type=simple
+PIDFile=/var/run/holdmybeer-fcgi.pid
+Restart=always
+RestartSec=1
+ExecStart=/usr/sbin/holdmybeer-fcgi
+ExecReload=pkill --signal 1 --pidfile /var/run/holdmybeer-fcgi.pid
+ExecStop=pkill --signal 9 --pidfile /var/run/holdmybeer-fcgi.pid
+
+
+
