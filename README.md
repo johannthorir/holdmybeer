@@ -68,8 +68,7 @@ This should do it:
 	sudo systemctl enable holdmybeer.service
 	sudo service holdmybeer start
 
-##
-echo "Add a line to the nginx config to 'include snippets/holdmybeer.conf;'
+Then add a line to the nginx config to 'include snippets/holdmybeer.conf;'
 
 ## Copyright
 
