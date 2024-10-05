@@ -10,5 +10,5 @@ ExecStart=/usr/sbin/holdmybeer-fcgi
 ExecReload=pkill --signal 1 --pidfile /var/run/holdmybeer-fcgi.pid
 ExecStop=pkill --signal 9 --pidfile /var/run/holdmybeer-fcgi.pid
 
-
-
+[Install]
+WantedBy=multi-user.target
