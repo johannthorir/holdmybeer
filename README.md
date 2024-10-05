@@ -48,6 +48,29 @@ Uses libfcgi and libfcgi++ for the FastCGI interface. RapidJSON is used for JSON
 
 An example of using jquery $.ajax against this daemon is is example.html
 
+
+## Build and install
+
+This should do it:
+
+	git clone https://github.com/johannthorir/holdmybeer.git
+	cd holdmybeer
+	sudo apt-get install libfcgi-dev openssl
+	cmake .
+	make
+	sudo cp holdmybeer-fcgi /usr/sbin
+	sudo install -v holdmybeer.conf /etc/nginx/snippets
+	sudo install -v -D -t /etc/holdmybeer/ settings.json 
+	sudo install -v -D -t /usr/share/holdmybeer/ data.json
+	sudo install -v example.html /var/www/html
+	sudo install holdmybeer.service /etc/systemd/system/
+	sudo sudo systemctl daemon-reload
+	sudo systemctl enable holdmybeer.service
+	sudo service holdmybeer start
+
+##
+echo "Add a line to the nginx config to 'include snippets/holdmybeer.conf;'
+
 ## Copyright
 
 Copyright (C) 2014,2024 Jóhann Þórir Jóhannsson. All rights reserved.
