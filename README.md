@@ -31,7 +31,7 @@ Supports the JSON Merge Patch standard: https://datatracker.ietf.org/doc/html/rf
 
 ## Settings
 
-The daemon reads the settings from the json file /etc/holdmybeer/settings.json and expects an object with two member
+The daemon reads the settings from the json file /etc/holdmybeer/settings.json and expects an object with two members
 * "port" - this is the name of the fastcgi port, either a unix port or a tcp port.
 * "datafile" - path to the file for the persistance of the json document.
 
