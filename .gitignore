@@ -5,3 +5,4 @@ Makefile
 .vscode/c_cpp_properties.json
 .vscode/settings.json
 CMakeFiles
+beerbelly-fcgi
