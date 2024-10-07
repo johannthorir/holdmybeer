@@ -6,6 +6,12 @@
           src="https://code.jquery.com/jquery-3.7.1.min.js"
           integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
           crossorigin="anonymous"></script>              
+<script src="https://cdnjs.cloudflare.com/ajax/libs/json2html/2.2.3/json2html.min.js"></script>
+ 
+<script>
+
+    
+</script>
 
         <style>
             html {-webkit-font-smoothing: antialiased;-moz-osx-font-smoothing: grayscale;}
@@ -19,43 +25,51 @@
             textarea { padding: 4px; font-size : 110%; }
         </style>
         
-        <title>Hold My Beer</title>
+        <title>Beerbelly</title>
     </head>
     <body>
 
-        <div id="titlebar">Hold My Beer</div>
+        <div id="titlebar">Beerbelly</div>
         <div id="content">
-            <p>
-                <label for="pointer">JSON Pointer</label><br>
-                <input type="text" id="pointer" size="60" placeholder="json pointer here"/>
-            <p>
+            <div id="actionButtons">
+                <p>
+                    <label for="pointer">JSON Pointer</label><br>
+                    <input type="text" id="pointer" size="60" placeholder="json pointer here"/>
+                    <button class="actionButton" type="button" value="GET"    >GET</button> 
+                    <button class="actionButton" type="button" value="HEAD"   >HEAD</button>
+                    <button class="actionButton" type="button" value="DELETE" >DELETE</button>
+                <p>
+                
+
+                <p>
+                    <label for="json">JSON Data</label><br>
+                    <textarea id="json" rows="25" cols="80" placeholder="... enter json here..."></textarea>
+                </p>
+                
+                <p>
+                    <label for="ignore_if_match"><input type="checkbox" id="ignore_if_match"> Ignore if-match.</label>
+                    <label for="merge_patch"><input type="checkbox" id="merge_patch"> Use Merge-Patch.</label>
+                </p>
             
-            <p>
-                <label for="json">JSON Data</label><br>
-                     <textarea id="json" rows="25" cols="60" placeholder="... enter json here..."></textarea>
-            </p>
-            
-            <p>
-                <label for="ignore_if_match"><input type="checkbox" id="ignore_if_match"> Ignore if-match.</label>
-                <label for="merge_patch"><input type="checkbox" id="merge_patch"> Use Merge-Patch.</label>
-            </p>
-            <p id="actionButtons">
-                <button class="actionButton" type="button" value="GET"    >GET</button>
-                <button class="actionButton" type="button" value="PATCH"  >PATCH</button>
-                <button class="actionButton" type="button" value="PUT"    >PUT</button>
-                <button class="actionButton" type="button" value="DELETE" >DELETE</button>
-                <button class="actionButton" type="button" value="HEAD"   >HEAD</button>
-            </p>
+                <p>
+                    <button class="actionButton" type="button" value="PATCH"  >PATCH</button>   
+                    <button class="actionButton" type="button" value="PUT"    >PUT</button>                    
+                </p>
+                <p>
+                    <label for="query">Query</label><br>
+                    <input type="text" id="query" size="60" placeholder="jsonpath or jmespath here"/>
+                    <button class="actionButton" type="button" value="POST"   >POST</button>                
+                </p>
+            </div>
+
             <p id="res"></p>
             <pre id="data"></pre>
-            <p>         
+            <p style="display:none;">
                 <label for="re"">Reference</label><br> 
                 <input type="text" id="ref" size="60" placeholder="reference lookup">
                 <button class="actionButton" type="button" value=""  id="resolve" >Look up</button>
                 <pre id="lookup"></pre>
             </p>
-
-
 
             <script>
                 // this is from rosettacode.
@@ -95,10 +109,10 @@
                 }
 
                 class JSONPointerError extends Error {}
-            </script>
 
 
-            <script>
+        
+    
                 let doc = {};
             
                 $(document).ready(() => { 
@@ -116,6 +130,7 @@
                         }
             
                     })
+                    $("#data").json2html = $("body").json2html;
                 });
             
                 
@@ -129,9 +144,15 @@
                     $("#res").text("");
                     $("#data").text("")
                     if(method !== "PATCH" && method !== "PUT") {
+                        let payload = '';
+                        if(method == 'POST') {
+                            payload = $("#query").val();
+                        }
                         $.ajax({ 
-                            url: '/holdmybeer' + pointer, // URL of the resource 
+                            url: '/beerbelly' + pointer, // URL of the resource 
                             type: method, 
+                            contentType: 'application/jsonpath+json',
+                            data: payload,
                             success: function(data, textStatus, request) { 
                                 lastETag = request.getResponseHeader('ETag');
                                 lastModified = request.getResponseHeader('Last-Modified') 
@@ -140,7 +161,7 @@
                                     "Last modified: " + lastModified + "<br>" +
                                     "ETag: " + lastETag
                                 );                    
-                                doc = data;
+                                doc = data;                                
                                 $("#json").val(JSON.stringify(data, null, 2));
                             }, 
                             error: function(xhr, status, error) { 
@@ -169,7 +190,7 @@
                             headers["If-Match"] = lastETag;
             
                         $.ajax({ 
-                            url: '/holdmybeer' + pointer,
+                            url: '/beerbelly' + pointer,
                             type: method,
                             headers: headers,
                             contentType:  $("#merge_patch").is(':checked') ? 'application/merge-patch+json' : 'application/json', 
@@ -182,7 +203,7 @@
                                     "Last modified: " + lastModified + "<br>" +
                                     "ETag: " + lastETag
                                 );                    
-                                $("#json").val(JSON.stringify(data, null, 2));
+                                $("#json").val(JSON.stringify(data, null, 2));                                
                             }, 
                             error: function(xhr, status, error) { 
                                 $("#res").text('Failed applying method ' + method);

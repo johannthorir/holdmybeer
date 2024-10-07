@@ -11,6 +11,7 @@
 #include <chrono>
 #include <mutex>
 #include <iomanip>
+#include <iterator>
 
 #include <fcgio.h>
 #include <fcgiapp.h>
@@ -21,12 +22,11 @@
 
 #include <jsoncons/json.hpp>
 #include <jsoncons_ext/jsonpointer/jsonpointer.hpp>
+#include <jsoncons_ext/jsonpath/jsonpath.hpp>
 #include <jsoncons_ext/mergepatch/mergepatch.hpp>
 
 #include "ClockSetup.h"
 #include "base64.h"
-
-
 
 static const std::string JSON_HEADER = 
     "Status: 200 OK\r\n"
@@ -63,21 +63,20 @@ static const std::string END_HEADERS = "\r\n";
 
 static const std::string PID_FILE      = "/var/run/beerbelly-fcgi.pid";
 static const std::string FCGI_PORT     = "/var/run/beerbelly.sock";
-static const std::string SETTINGS_FILE = "/etc/beerbelly.json";
 
 volatile sig_atomic_t powerSwitch = 1;
 
-time_point lastModified;
+time_point     lastModified;
 jsoncons::json jdoc;
 jsoncons::json jsettings;
-std::mutex docMutex;
+std::recursive_mutex docMutex;
 
 
 // -----------------------------------------------------------------------------
 
-bool ReadSettingsFromFile() 
+bool ReadSettingsFromFile(const std::string &file) 
 {   
-    std::ifstream in(SETTINGS_FILE);
+    std::ifstream in(file);
     if(in.is_open()) 
     {
         try 
@@ -95,7 +94,7 @@ bool ReadSettingsFromFile()
         
         return true;
     }
-    std::cerr << "Can't open settings file " << SETTINGS_FILE << std::endl;
+    std::cerr << "Can't open settings file " << file << std::endl;
     return false;
 }
 
@@ -104,13 +103,12 @@ bool ReadSettingsFromFile()
 
 bool UnSerializeFromFile() 
 {
-    const std::lock_guard<std::mutex> lock(docMutex);
+    const std::lock_guard<std::recursive_mutex> lock(docMutex);
     std::string filename = jsettings["datafile"].as_string();
     std::ifstream in(filename);
     
     if(in.is_open()) 
     {
-
         try 
         {
             jdoc = jsoncons::json::parse(in);
@@ -123,7 +121,6 @@ bool UnSerializeFromFile()
                   << " and message " << e.what() << std::endl;            
             return false;
         }
-
 
         lastModified =  local_clock::now();
         std::cout << "Read in " << filename << std::endl;
@@ -138,7 +135,7 @@ bool UnSerializeFromFile()
 
 bool SerializeToFile()
 {
-    const std::lock_guard<std::mutex> lock(docMutex);
+    const std::lock_guard<std::recursive_mutex> lock(docMutex);
     std::ofstream ofs(jsettings["datafile"].as_string());
     if(ofs.is_open()) 
     {
@@ -148,6 +145,7 @@ bool SerializeToFile()
     
     return false;
 }
+
 
 // -----------------------------------------------------------------------------
 
@@ -162,6 +160,8 @@ void AddLastModifiedHeader()
 std::string GetETag(const std::string &buffer)
 {
     unsigned char result[MD5_DIGEST_LENGTH];    
+
+    // printf("Buffer size is %lu\n", buffer.size());
     MD5((const unsigned char*)(buffer.c_str()), buffer.size(), result);
 
     std::stringstream oss;    
@@ -184,7 +184,7 @@ void AddETagFromBuffer(const std::string& buffer)
 
 void AddJsonFromBuffer(const std::string &buffer)
 {
-    std::cout << CONTENT_DISPOSITION_HEADER << JSON_HEADER << END_HEADERS << buffer;
+    std::cout << CONTENT_DISPOSITION_HEADER << JSON_HEADER << END_HEADERS << buffer << std::endl;
 }
 
 
@@ -192,23 +192,19 @@ void AddJsonFromBuffer(const std::string &buffer)
 
 void HandleFCGIGet(const char *path, FCGX_Request &req) 
 {
-    // let's get the document 
-    const std::lock_guard<std::mutex> lock(docMutex);
-    AddLastModifiedHeader();
 
-    // Using error codes to report errors
+    // let's get the document 
+    const std::lock_guard<std::recursive_mutex> lock(docMutex);
+    AddLastModifiedHeader();
+        
+    std::istreambuf_iterator<char> begin(std::cin), end;
+    std::string query(begin, end);
+
     std::error_code ec;
     const jsoncons::json& currentNode = jsoncons::jsonpointer::get(jdoc, path, ec);
     if (ec)
     {
-        try 
-        {
-            std::cout << NOT_FOUND_HEADER << END_HEADERS;
-        }
-        catch(std::exception const &e)  
-        {
-            std::cerr << "Exception when returning Not Found." << e.what() << std::endl;
-        }      
+        std::cout << NOT_FOUND_HEADER << END_HEADERS;
     }
     else
     {
@@ -219,13 +215,69 @@ void HandleFCGIGet(const char *path, FCGX_Request &req)
     }
 }
 
+
+void HandleFCGIPost(const char *path, FCGX_Request &req) 
+{
+
+    // let's get the document 
+    const std::lock_guard<std::recursive_mutex> lock(docMutex);
+    AddLastModifiedHeader();
+        
+    std::istreambuf_iterator<char> begin(std::cin), end;
+    std::string query(begin, end);
+    std::error_code ec;
+    const jsoncons::json& currentNode = jsoncons::jsonpointer::get(jdoc, path, ec);
+    if (ec)
+    {
+        std::cout << NOT_FOUND_HEADER << END_HEADERS;
+    }
+    else
+    {
+        if(query.length() > 0)
+        {
+            // ok, we have a jsonpath or a jmespath
+            if(query.at(0) == '$')
+            {
+                // this is a jsonpath
+                
+                try 
+                {
+                    auto res = jsoncons::jsonpath::json_query(currentNode, query);
+                    std::string buffer;                    
+                    res.dump(buffer, jsoncons::indenting::indent);                
+                    AddETagFromBuffer(buffer);             
+                    AddJsonFromBuffer(buffer);
+                }
+                catch(const jsoncons::jsonpath::jsonpath_error &e)
+                {
+                    std::cerr << e.what();
+                    std::cout << CLIENT_ERROR_HEADER << END_HEADERS;                    
+                }
+            }
+            else
+            { 
+                // interpret as JMESPath.
+
+            }
+        }
+        else
+        {
+            std::string buffer;
+            currentNode.dump(buffer, jsoncons::indenting::indent);
+            AddETagFromBuffer(buffer);
+            AddJsonFromBuffer(buffer);
+        }
+    }
+}
+
+
 // -----------------------------------------------------------------------------
 
 
 void HandleFCGIPatch(const char *path, FCGX_Request &req) 
 {
      // Let's get the document 
-    const std::lock_guard<std::mutex> lock(docMutex);
+    const std::lock_guard<std::recursive_mutex> lock(docMutex);
 
     // check the content type:
     std::string contentType(FCGX_GetParam("CONTENT_TYPE", req.envp));
@@ -236,15 +288,8 @@ void HandleFCGIPatch(const char *path, FCGX_Request &req)
     if(!isJson and !isJsonMergePatch) 
     {
         // RETURN PARSE ERROR HEADERS.
-        std::cerr << "PATCH Input is neither json or merge-patch json but '" << contentType << "'" << std::endl;
-        try 
-        {
-            std::cout << INCORRECT_PATCH_MEDIA_TYPE << END_HEADERS;
-        }
-        catch(std::exception const &e)  
-        {
-            std::cerr << "Exception when returning Client Error." << e.what() << std::endl;
-        }      
+        std::cerr << std::string("PATCH Input is neither json or merge-patch json but ") + contentType;
+        std::cout << INCORRECT_PATCH_MEDIA_TYPE << END_HEADERS;
         return;        
     }
 
@@ -257,10 +302,12 @@ void HandleFCGIPatch(const char *path, FCGX_Request &req)
     catch(const jsoncons::ser_error& e) 
     {
         std::cout << CLIENT_ERROR_HEADER << END_HEADERS;
-        std::cerr << "Parse errors in the data json file at line: " << e.line() << " col: " << e.column() 
+        std::stringstream oss;
+        oss << "Parse errors in the data json file at line: " << e.line() << " col: " << e.column() 
                 << ", category: " <<e.code().category().name() 
                 << ", code: " << e.code().value() 
-                << " and message " << e.what() << std::endl;            
+                << " and message " << e.what() << std::endl;
+        std::cerr << oss.str();
         return;
     }
 
@@ -277,7 +324,6 @@ void HandleFCGIPatch(const char *path, FCGX_Request &req)
     if(http_if_match) 
     {
         // the client wants us to verify that this has not changed...
-
         std::string buffer;
         currentNode.dump(buffer, jsoncons::indenting::indent);
         
@@ -296,12 +342,15 @@ void HandleFCGIPatch(const char *path, FCGX_Request &req)
     //   NOTE: the modified timestamp is not granular - it is for the whole store.
     
     if(isJsonMergePatch) 
-        jsoncons::mergepatch::apply_merge_patch(currentNode, incoming);        
-        // JsonMergePatch(*currentNode, incoming);
+        jsoncons::mergepatch::apply_merge_patch(currentNode, incoming);                
     else
         currentNode.swap(incoming);    
     
     lastModified =  local_clock::now();
+    
+    if(jsettings["alwayssave"].as_bool()) 
+        SerializeToFile();
+
     AddLastModifiedHeader();
     
     const jsoncons::json& updated = jsoncons::jsonpointer::get(jdoc, path);
@@ -310,7 +359,6 @@ void HandleFCGIPatch(const char *path, FCGX_Request &req)
     updated.dump(buffer, jsoncons::indenting::indent);
     AddETagFromBuffer(buffer);
     AddJsonFromBuffer(buffer);
-
 }
 
 // -----------------------------------------------------------------------------
@@ -318,7 +366,7 @@ void HandleFCGIPatch(const char *path, FCGX_Request &req)
 void HandleFCGIPut(const char *path, FCGX_Request &req) 
 {
     // Let's get the document 
-    const std::lock_guard<std::mutex> lock(docMutex);
+    const std::lock_guard<std::recursive_mutex> lock(docMutex);
     
     // check the content type:
     std::string contentType(FCGX_GetParam("CONTENT_TYPE", req.envp));    
@@ -327,15 +375,10 @@ void HandleFCGIPut(const char *path, FCGX_Request &req)
     if(!isJson)
     {
         // RETURN PARSE ERROR HEADERS.
-        std::cerr << "PUT Input is not json but '" << contentType << "'" << std::endl;
-        try 
-        {
-            std::cout << INCORRECT_PATCH_MEDIA_TYPE << END_HEADERS;
-        }
-        catch(std::exception const &e)  
-        {
-            std::cerr << "Exception when returning Client Error." << e.what() << std::endl;
-        }      
+        std::stringstream oss;
+        oss << "PUT Input is not json but '" << contentType << "'";
+        std::cerr << oss.str();
+        std::cout << INCORRECT_PATCH_MEDIA_TYPE << END_HEADERS;
         return;        
     }
 
@@ -348,24 +391,42 @@ void HandleFCGIPut(const char *path, FCGX_Request &req)
     catch(const jsoncons::ser_error& e) 
     {
         std::cout << CLIENT_ERROR_HEADER << END_HEADERS;
-        std::cerr << "Parse errors in the incoming json at line: " << e.line() << " col: " << e.column() 
+        std::stringstream oss;    
+    
+        oss << "Parse errors in the incoming json at line: " << e.line() << " col: " << e.column() 
                 << ", category: " <<e.code().category().name() 
                 << ", code: " << e.code().value() 
                 << " and message " << e.what() << std::endl;            
+        std::cerr << oss.str();
         return;
     }
     
     std::error_code ec;
-    jsoncons::jsonpointer::add_if_absent(jdoc, path, incoming, true, ec);
+    if(std::string(path) == "") 
+    {
+        jdoc.swap(incoming);
+    }
+    else 
+    {
+        jsoncons::jsonpointer::add(jdoc, path, incoming, true, ec);
+    }
     
     if (ec)
     {
+        std::stringstream oss;    
+        oss << "Error in replace: " 
+                << ", category: " <<ec.category().name() 
+                << ", code: " << ec.value() 
+                << ", message " << ec.message() << std::endl;          
+        std::cerr << oss.str();
         std::cout << NOT_FOUND_HEADER << END_HEADERS;            
         return;    
     }
 
     
     lastModified =  local_clock::now();
+    if(jsettings["alwayssave"].as_bool()) 
+        SerializeToFile();
     AddLastModifiedHeader();
     
     std::string buffer;
@@ -379,7 +440,7 @@ void HandleFCGIPut(const char *path, FCGX_Request &req)
 void HandleFCGIDelete(const char *path, FCGX_Request &req)
 {
     // Let's get the document 
-    const std::lock_guard<std::mutex> lock(docMutex);
+    const std::lock_guard<std::recursive_mutex> lock(docMutex);
     
     std::error_code ec;
     jsoncons::jsonpointer::remove(jdoc, path, ec);
@@ -390,8 +451,10 @@ void HandleFCGIDelete(const char *path, FCGX_Request &req)
     }
   
     lastModified =  local_clock::now();
+    if(jsettings["alwayssave"].as_bool()) 
+        SerializeToFile();
     AddLastModifiedHeader();
-    std::cout << JSON_HEADER << END_HEADERS << "true";
+    std::cout << JSON_HEADER << END_HEADERS << "true" << std::endl;
 }
 
 // -----------------------------------------------------------------------------
@@ -399,7 +462,7 @@ void HandleFCGIDelete(const char *path, FCGX_Request &req)
 void HandleFCGIHead(const char *path, FCGX_Request &req)
 {
     // let's get the document 
-    const std::lock_guard<std::mutex> lock(docMutex);
+    const std::lock_guard<std::recursive_mutex> lock(docMutex);
     AddLastModifiedHeader();
 
     // Using error codes to report errors
@@ -433,26 +496,20 @@ extern "C" void sighandler(int sig_no)
     }
 }
 
-// -----------------------------------------------------------------------------
-
-void SavePid() {
-    std::ofstream pidfile;
-    pidfile.open(PID_FILE);
-    pidfile << getpid();
-    pidfile.close();
-}
 
 // -----------------------------------------------------------------------------
 
-int main(void)
+int main(int argc, char **argv)
 {
 
-    SavePid();
+    std::string configfile = argc == 2 ? argv[1] : "/etc/beerbelly.json";
 
-    ReadSettingsFromFile();
+    ReadSettingsFromFile(configfile);
 
-    std::cout << jsettings["datafile"].as_string() << std::endl;
-    std::cout << jsettings["port"].as_string() << std::endl;
+    std::ofstream pidfile;
+    pidfile.open(jsettings["pidfile"].as_string());
+    pidfile << getpid();
+    pidfile.close();
 
     struct sigaction new_action, old_action;    
     new_action.sa_handler = sighandler;
@@ -477,8 +534,6 @@ int main(void)
     umask(0);
     int sock = FCGX_OpenSocket(jsettings["port"].as_string().c_str(), 128);
 
-    
-
     if((res = FCGX_InitRequest(&request, sock, 0)) != 0)
         std::cerr << "FCGX_InitRequest fail: " << res << std::endl;
 
@@ -495,17 +550,19 @@ int main(void)
         char *pi = FCGX_GetParam("PATH_INFO", request.envp);
         std::string method(FCGX_GetParam("REQUEST_METHOD", request.envp));
 
-        // char **env = req.envp; while (*(++env)) puts(*env);
-
         if     (method == "GET"   )  HandleFCGIGet(pi, request);
         else if(method == "PATCH" )  HandleFCGIPatch(pi, request);
         else if(method == "PUT"   )  HandleFCGIPut(pi, request);                    
         else if(method == "DELETE")  HandleFCGIDelete(pi, request);
-        else if(method == "HEAD"  )  HandleFCGIHead(pi, request);
+        else if(method == "HEAD"  )  HandleFCGIHead(pi, request);        
+        else if(method == "POST"  )  HandleFCGIPost(pi, request);
         else  
         {
             std::cout << METHOD_ERROR_HEADER << JSON_HEADER << END_HEADERS << METHOD_ERROR_BODY;
-            std::cerr << "Method " << method << " not allowed from " << std::string(FCGX_GetParam("REMOTE_ADDR", request.envp));
+            std::stringstream oss;
+            oss << "Method " << method << " not allowed from " << std::string(FCGX_GetParam("REMOTE_ADDR", request.envp)) << std::endl;
+            std::cerr << oss.str();
+
         }
         
         FCGX_Finish_r(&request);

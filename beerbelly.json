@@ -1,4 +1,6 @@
 {
     "port": "/var/run/beerbelly.sock",
-    "datafile": "/usr/share/beerbelly/data.json"
+    "pidfile": "/var/run/beerbelly-fcgi.pid",
+    "datafile": "/usr/share/beerbelly/data.json",
+    "alwayssave": false
 }
