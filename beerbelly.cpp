@@ -23,6 +23,7 @@
 #include <jsoncons/json.hpp>
 #include <jsoncons_ext/jsonpointer/jsonpointer.hpp>
 #include <jsoncons_ext/jsonpath/jsonpath.hpp>
+#include <jsoncons_ext/jmespath/jmespath.hpp>
 #include <jsoncons_ext/mergepatch/mergepatch.hpp>
 
 #include "ClockSetup.h"
@@ -239,7 +240,6 @@ void HandleFCGIPost(const char *path, FCGX_Request &req)
             if(query.at(0) == '$')
             {
                 // this is a jsonpath
-                
                 try 
                 {
                     auto res = jsoncons::jsonpath::json_query(currentNode, query);
@@ -257,7 +257,19 @@ void HandleFCGIPost(const char *path, FCGX_Request &req)
             else
             { 
                 // interpret as JMESPath.
-
+                try 
+                {
+                    auto res = jsoncons::jmespath::search(currentNode, query);
+                    std::string buffer;                    
+                    res.dump(buffer, jsoncons::indenting::indent);                
+                    AddETagFromBuffer(buffer);             
+                    AddJsonFromBuffer(buffer);
+                }
+                catch(const jsoncons::jmespath::jmespath_error &e)
+                {
+                    std::cerr << e.what();
+                    std::cout << CLIENT_ERROR_HEADER << END_HEADERS;                    
+                }
             }
         }
         else
