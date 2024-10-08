@@ -416,7 +416,7 @@ void HandleFCGIPut(const char *path, FCGX_Request &req)
     std::error_code ec;
     if(std::string(path) == "") 
     {
-        jdoc.swap(incoming);
+        jdoc = incoming;
     }
     else 
     {
