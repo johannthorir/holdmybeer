@@ -64,7 +64,7 @@ This should do it:
 	sudo install -v -D -t /usr/share/holdmybeer/ data.json
 	sudo install -v example.html /var/www/html
 	sudo install holdmybeer.service /etc/systemd/system/
-	sudo sudo systemctl daemon-reload
+	sudo systemctl daemon-reload
 	sudo systemctl enable holdmybeer.service
 	sudo service holdmybeer start
 

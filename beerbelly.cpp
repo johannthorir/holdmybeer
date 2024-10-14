@@ -286,7 +286,7 @@ void HandleFCGIPost(const char *path, FCGX_Request &req)
 // -----------------------------------------------------------------------------
 
 
-void HandleFCGIPatch(const char *path, FCGX_Request &req) 
+bool HandleFCGIPatch(const char *path, FCGX_Request &req) 
 {
      // Let's get the document 
     const std::lock_guard<std::recursive_mutex> lock(docMutex);
@@ -302,7 +302,7 @@ void HandleFCGIPatch(const char *path, FCGX_Request &req)
         // RETURN PARSE ERROR HEADERS.
         std::cerr << std::string("PATCH Input is neither json or merge-patch json but ") + contentType;
         std::cout << INCORRECT_PATCH_MEDIA_TYPE << END_HEADERS;
-        return;        
+        return false;
     }
 
     jsoncons::json incoming;
@@ -320,7 +320,7 @@ void HandleFCGIPatch(const char *path, FCGX_Request &req)
                 << ", code: " << e.code().value() 
                 << " and message " << e.what() << std::endl;
         std::cerr << oss.str();
-        return;
+        return false;
     }
 
     std::error_code ec;
@@ -328,7 +328,7 @@ void HandleFCGIPatch(const char *path, FCGX_Request &req)
     if (ec)
     {
         std::cout << NOT_FOUND_HEADER << END_HEADERS;            
-        return;    
+        return false;    
     }
     
     // Mid-air collision prevention:
@@ -344,7 +344,7 @@ void HandleFCGIPatch(const char *path, FCGX_Request &req)
         if(std::string(http_if_match) != etag)
         {
             std::cout << PRECONDITION_FAILED_HEADER << END_HEADERS;
-            return;
+            return false;
         }
     }
 
@@ -360,9 +360,6 @@ void HandleFCGIPatch(const char *path, FCGX_Request &req)
     
     lastModified =  local_clock::now();
     
-    if(jsettings["alwayssave"].as_bool()) 
-        SerializeToFile();
-
     AddLastModifiedHeader();
     
     const jsoncons::json& updated = jsoncons::jsonpointer::get(jdoc, path);
@@ -371,11 +368,13 @@ void HandleFCGIPatch(const char *path, FCGX_Request &req)
     updated.dump(buffer, jsoncons::indenting::indent);
     AddETagFromBuffer(buffer);
     AddJsonFromBuffer(buffer);
+
+    return jsettings["alwayssave"].as_bool();
 }
 
 // -----------------------------------------------------------------------------
 
-void HandleFCGIPut(const char *path, FCGX_Request &req) 
+bool HandleFCGIPut(const char *path, FCGX_Request &req) 
 {
     // Let's get the document 
     const std::lock_guard<std::recursive_mutex> lock(docMutex);
@@ -391,7 +390,7 @@ void HandleFCGIPut(const char *path, FCGX_Request &req)
         oss << "PUT Input is not json but '" << contentType << "'";
         std::cerr << oss.str();
         std::cout << INCORRECT_PATCH_MEDIA_TYPE << END_HEADERS;
-        return;        
+        return false;
     }
 
     jsoncons::json incoming;
@@ -410,7 +409,7 @@ void HandleFCGIPut(const char *path, FCGX_Request &req)
                 << ", code: " << e.code().value() 
                 << " and message " << e.what() << std::endl;            
         std::cerr << oss.str();
-        return;
+        return false;
     }
     
     std::error_code ec;
@@ -432,24 +431,25 @@ void HandleFCGIPut(const char *path, FCGX_Request &req)
                 << ", message " << ec.message() << std::endl;          
         std::cerr << oss.str();
         std::cout << NOT_FOUND_HEADER << END_HEADERS;            
-        return;    
+        return false;
     }
 
     
     lastModified =  local_clock::now();
-    if(jsettings["alwayssave"].as_bool()) 
-        SerializeToFile();
+
     AddLastModifiedHeader();
     
     std::string buffer;
     incoming.dump(buffer, jsoncons::indenting::indent);
     AddETagFromBuffer(buffer);
     AddJsonFromBuffer(buffer);
+
+    return jsettings["alwayssave"].as_bool();
 }
 
 // -----------------------------------------------------------------------------
 
-void HandleFCGIDelete(const char *path, FCGX_Request &req)
+bool HandleFCGIDelete(const char *path, FCGX_Request &req)
 {
     // Let's get the document 
     const std::lock_guard<std::recursive_mutex> lock(docMutex);
@@ -459,14 +459,15 @@ void HandleFCGIDelete(const char *path, FCGX_Request &req)
     if (ec)
     {
         std::cout << NOT_FOUND_HEADER << END_HEADERS;
-        return;
+        return false;
     }
   
     lastModified =  local_clock::now();
-    if(jsettings["alwayssave"].as_bool()) 
-        SerializeToFile();
+
     AddLastModifiedHeader();
     std::cout << JSON_HEADER << END_HEADERS << "true" << std::endl;
+
+    return jsettings["alwayssave"].as_bool();
 }
 
 // -----------------------------------------------------------------------------
@@ -562,10 +563,12 @@ int main(int argc, char **argv)
         char *pi = FCGX_GetParam("PATH_INFO", request.envp);
         std::string method(FCGX_GetParam("REQUEST_METHOD", request.envp));
 
+        bool save = false;
+
         if     (method == "GET"   )  HandleFCGIGet(pi, request);
-        else if(method == "PATCH" )  HandleFCGIPatch(pi, request);
-        else if(method == "PUT"   )  HandleFCGIPut(pi, request);                    
-        else if(method == "DELETE")  HandleFCGIDelete(pi, request);
+        else if(method == "PATCH" )  save = HandleFCGIPatch(pi, request);
+        else if(method == "PUT"   )  save = HandleFCGIPut(pi, request);                    
+        else if(method == "DELETE")  save = HandleFCGIDelete(pi, request);
         else if(method == "HEAD"  )  HandleFCGIHead(pi, request);        
         else if(method == "POST"  )  HandleFCGIPost(pi, request);
         else  
@@ -578,6 +581,9 @@ int main(int argc, char **argv)
         }
         
         FCGX_Finish_r(&request);
+
+        if(save)
+            SerializeToFile();
     }
     close(sock);
 
